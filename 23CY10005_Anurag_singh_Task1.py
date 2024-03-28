@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
 import random
-
+import copy
 class HexagonalGameOfLife:
     def __init__(self, size):
         self.size = size
@@ -18,7 +18,10 @@ class HexagonalGameOfLife:
     def get_neighbors(self, i, j):
         # Get the neighbors of a cell (i, j) in a hexagonal grid
         neighbors = []
-        offsets = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, -1), (-1, 1)]
+        if i % 2 == 0:
+            offsets = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1)]
+        else:
+            offsets = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, -1), (-1, -1)]
         for offset in offsets:
             ni = i + offset[0]
             nj = j + offset[1]
@@ -27,11 +30,25 @@ class HexagonalGameOfLife:
         return neighbors
 
     def count_live_neighbors(self, i, j):
-        # Count the number of live neighbors of a cell (i, j)
-        neighbors = self.get_neighbors(i, j)
-        count = sum(self.grid[n[0], n[1]] for n in neighbors)
-        return count
-
+            # Count the number of live neighbors of a cell (i, j)
+            neighbors = self.get_neighbors(i, j)
+            count = sum(self.grid[n[0], n[1]] for n in neighbors)
+            return count
+    def will_live(self, i, j):
+        live_neighbors = self.count_live_neighbors(i, j)
+        if self.grid[i, j] == 1:
+            # Cell is alive
+            if live_neighbors < 2:
+                return False  # Underpopulation
+            elif live_neighbors in [2, 3]:
+                return True  # Survival
+            else:
+                return False  # Overpopulation
+        else:
+            # Cell is dead
+            if live_neighbors == 3:
+                return True  # Reproduction
+        return False
     def apply_rules(self):
         new_grid = np.zeros((self.size, self.size), dtype=int)
         for i in range(self.size):
@@ -102,21 +119,47 @@ class HexagonalGameOfLife:
         plt.savefig(filename)
         plt.close()
 
-
     def run_simulation(self, generations, image_prefix):
         self.initialize_grid()
+        # Keep track of past generations
+        past_generations = {}
         for gen in range(generations):
+            # Save the current state of the grid
+            def will_live(grid, i, j):
+                live_neighbors = self.count_live_neighbors(i, j)
+                if self.grid[i, j] == 1:
+                    # Cell is alive
+                    if live_neighbors < 2:
+                        return False  # Underpopulation
+                    elif live_neighbors in [2, 3]:
+                        return True  # Survival
+                    else:
+                        return False  # Overpopulation
+                else:
+                    # Cell is dead
+                    if live_neighbors == 3:
+                        return True  # Reproduction
+                    return False
+
+            past_generations[gen] = copy.deepcopy(self.grid)
             self.apply_rules()
             self.resurrect_cells()
             self.random_resurrection()
+            # Resurrect the (n-6)th generation in the nth generation
+            if gen > 5:
+                # adding all the cell that are going to die in gen n-5 to this generation
+                for i in range(self.size):
+                    for j in range(self.size):
+                        if self.grid[i, j] == 0:
+                            if (will_live(past_generations[gen-5], i, j)==False):
+                                self.grid[i, j] = 1
             self.save_grid_image(f"{image_prefix}_generation_{self.generation}.png")
             self.generation += 1
-       
         
         
 # Example usage:
 size = 10
-generations = 10
+generations = 50
 image_prefix = "hexagonal_game_of_life"
 game = HexagonalGameOfLife(size)
 game.run_simulation(generations, image_prefix)
